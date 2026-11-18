@@ -14,10 +14,10 @@
     "url": "https://github.com/taffy114514/dsh-plugin-unlock/issues"
   },
   "keywords": [
-    "dsh-plugin",
     "dsh",
+    "dsh-plugin",
     "deepseek-harness",
-    "desktop",
+    "cordis",
     "plugin-manager",
     "bundle-in-use"
   ],
@@ -42,11 +42,15 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "prepublishOnly": "node --test"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
