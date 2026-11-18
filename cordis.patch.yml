@@ -1,0 +1,9 @@
+- insert:
+    - id: dsh-plugin-unlock
+      name: dsh-plugin-unlock
+      config:
+        autoFix: true
+        autoUpdate: true
+        cooldownMs: 600000
+        route: /dsh-plugin-unlock
+        log: true

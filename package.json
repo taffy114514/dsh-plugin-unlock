@@ -1,0 +1,43 @@
+{
+  "name": "dsh-plugin-unlock",
+  "version": "0.1.0",
+  "description": "Force-release DSH plugins that are stuck \"in use\" so the desktop marketplace can update or remove them again.",
+  "type": "module",
+  "license": "MIT",
+  "author": "YG",
+  "keywords": [
+    "dsh-plugin",
+    "dsh",
+    "deepseek-harness",
+    "desktop",
+    "plugin-manager",
+    "bundle-in-use"
+  ],
+  "icon": "./icon.svg",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib/*.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
