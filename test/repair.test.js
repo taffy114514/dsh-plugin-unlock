@@ -11,7 +11,10 @@ const BUNDLES = [
   { name: 'dsh-market', version: '1.73.20', enabled: true, installed: true, official: false, availability: 'profile', removable: true },
 ];
 
-function setup({ entries = [], manager, config } = {}) {
+const RUNTIME_OK = { ok: true, source: 'DSH_PRIMARY_RUNTIME', root: '/rt', pnpmPath: '/rt/dependencies/pnpm/bin/pnpm.mjs', runtimeJson: true, candidates: [] };
+const RUNTIME_GONE = { ok: false, source: 'execPath', root: '/app/resources/runtime/primary-runtime', pnpmPath: '/app/resources/runtime/primary-runtime/dependencies/pnpm/bin/pnpm.mjs', runtimeJson: false, candidates: [] };
+
+function setup({ entries = [], manager, config, runtime = RUNTIME_OK } = {}) {
   const log = makeLog();
   const resolvedConfig = normalizeConfig(config ?? {});
   const state = { healing: new Set(), inFlight: new Set(), attempts: new Map() };
@@ -20,7 +23,7 @@ function setup({ entries = [], manager, config } = {}) {
     loader: makeLoader(entries),
     connection: { requestRejection: () => 0 },
   });
-  const repair = createRepair({ ctx, config: resolvedConfig, state, log });
+  const repair = createRepair({ ctx, config: resolvedConfig, state, log, probe: () => runtime });
   return { ctx, repair, log, state, config: resolvedConfig };
 }
 
@@ -259,4 +262,54 @@ test('config normalisation repairs a malformed patch config', () => {
   assert.equal(config.cooldownMs, 600000);
   assert.equal(config.route, '/dsh-plugin-unlock');
   assert.equal(config.maxLogEvents, 1);
+});
+
+test('status reports the pnpm payload the Host installs through', async () => {
+  const manager = makeManager({ bundles: BUNDLES, rows: ROWS });
+  const { repair } = setup({ manager });
+  const status = await repair.status();
+  assert.equal(status.runtime.ok, true);
+  assert.equal(status.runtime.pnpmPath, RUNTIME_OK.pnpmPath);
+  assert.equal(status.runtime.hint, null);
+});
+
+test('update releases the lock but refuses to fake an install it cannot run', async () => {
+  const entry = makeEntry({ id: 'dsh-caveman', name: 'dsh-caveman' });
+  const manager = makeManager({ bundles: BUNDLES, rows: ROWS, versions: ['1.4.2'] });
+  const { repair } = setup({ entries: [entry], manager, runtime: RUNTIME_GONE });
+
+  const result = await repair.update('dsh-caveman');
+  assert.equal(result.ok, false);
+  assert.equal(result.step, 'runtime');
+  assert.equal(result.needsRuntimeRepair, true);
+  assert.match(result.runtime.hint, /runtime payload/);
+  assert.equal(entry.fiber.uid, null, 'the lock is still cleared first');
+  assert.equal(manager.calls.updateBundle.length, 0, 'the manager is not asked to install what cannot install');
+});
+
+test('remove is held back the same way when pnpm is missing', async () => {
+  const entry = makeEntry({ id: 'dsh-caveman', name: 'dsh-caveman' });
+  const manager = makeManager({ bundles: BUNDLES, rows: ROWS });
+  const { repair } = setup({ entries: [entry], manager, runtime: RUNTIME_GONE });
+
+  const result = await repair.remove('dsh-caveman');
+  assert.equal(result.step, 'runtime');
+  assert.equal(manager.calls.removeBundle.length, 0);
+  assert.equal(entry.fiber.uid, null);
+});
+
+test('a manager failure that names pnpm is reported as a runtime problem', async () => {
+  const entry = makeEntry({ id: 'dsh-caveman', name: 'dsh-caveman' });
+  const manager = makeManager({ bundles: BUNDLES, rows: ROWS, versions: ['1.4.2'] });
+  manager.updateBundle = async () => {
+    const error = new Error("Cannot find module '...\\resources\\runtime\\primary-runtime\\dependencies\\pnpm\\bin\\pnpm.mjs'");
+    error.code = 'MODULE_NOT_FOUND';
+    throw error;
+  };
+  const { repair } = setup({ entries: [entry], manager });
+
+  const result = await repair.update('dsh-caveman', { version: '1.4.2' });
+  assert.equal(result.step, 'runtime');
+  assert.equal(result.needsRuntimeRepair, true);
+  assert.equal(result.error.code, 'MODULE_NOT_FOUND');
 });

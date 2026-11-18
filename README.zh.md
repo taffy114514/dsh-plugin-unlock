@@ -69,6 +69,7 @@ pnpm add github:YG/dsh-plugin-unlock
 | --- | --- |
 | `status` | 列出 profile 里所有 bundle、是否被挡、被哪些条目挡 |
 | `in_use` | 只列被挡的 |
+| `runtime` | Host 跑安装用的那份 pnpm 到底在不在盘上 |
 | `release` | 释放挡路条目（停掉插件，不动任何文件） |
 | `update` | 释放后交给管理器更新到最新（或指定）版本 |
 | `remove` | 释放后交给管理器卸载 |
@@ -100,6 +101,7 @@ curl -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal-all
 | `/dsh-plugin-unlock/` | GET —— 接口自述 |
 | `/dsh-plugin-unlock/status[?name=…]` | GET |
 | `/dsh-plugin-unlock/in-use[?name=…]` | GET |
+| `/dsh-plugin-unlock/runtime` | GET——Host 从哪个 pnpm 跑，那份载荷在不在 |
 | `/dsh-plugin-unlock/release` | POST `{name?}` |
 | `/dsh-plugin-unlock/update` | POST `{name, version?}` |
 | `/dsh-plugin-unlock/remove` | POST `{name}` |
@@ -139,14 +141,15 @@ curl -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal-all
 - **管理器报 `stop-profile`**：Host 没有 HMR，不支持热卸载，只能重启 DSH。
 - **某个 fiber 拒绝 dispose**（teardown 抛错）：插件返回 `needsRestart`，不动 profile。重启 DSH 后再重试更新。
 - **bundle 来自固定 Git commit**：没有"更新到哪个版本"可言；插件只解除阻塞，然后告诉你回市场重试——那时它会按新的 spec 卸载重装。
+- **运行时载荷缺失**：这是另一个缺陷，症状却很像。桌面端所有安装/卸载都走它自带的 pnpm：`resources/runtime/primary-runtime/dependencies/pnpm/bin/pnpm.mjs`。这个文件没了（更新中断、目录被清理、安装被复制得只剩一半），操作就会在**解除锁之后**失败，报 `MODULE_NOT_FOUND … pnpm.mjs` 或 `ERR_PNPM_UNEXPECTED_STORE`。释放 fiber 变不出一个文件来，所以插件会先查这件事、不假装能修，返回 `step: "runtime"`、`needsRuntimeRepair: true` 和它查的确切路径。修复或重装 DeepSeek Harness 后再重试；`action: "runtime"`（或 `GET /dsh-plugin-unlock/runtime`）能直接告诉你是哪一种问题。
 
 ## 开发
 
 ```bash
-node --test          # 57 个单元测试，零依赖
+node --test          # 66 个单元测试，零依赖
 ```
 
-`lib/keys.js` 里放着这个插件唯一的核心知识——管理器自己那套"是否在使用中"的判据——写成纯函数，所以匹配规则不需要 Host 就能测。其余都是对注入服务的 I/O。
+`lib/runtime.js` 处理另一半问题：Host 到底用哪份 pnpm、它该在哪、在不在。`lib/keys.js` 里放着这个插件唯一的核心知识——管理器自己那套"是否在使用中"的判据——写成纯函数，所以匹配规则不需要 Host 就能测。其余都是对注入服务的 I/O。
 
 ## 许可
 

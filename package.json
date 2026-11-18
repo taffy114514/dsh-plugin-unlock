@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-unlock",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Force-release DSH plugins that are stuck \"in use\" so the desktop marketplace can update or remove them again.",
   "type": "module",
   "license": "MIT",

@@ -69,6 +69,7 @@ Guard rails: one automatic repair per bundle per 10 minutes, never twice for the
 | --- | --- |
 | `status` | every bundle in the profile, whether it is blocked, and by which entries |
 | `in_use` | only the blocked bundles |
+| `runtime` | whether the pnpm payload the Host installs through is actually on disk |
 | `release` | dispose the blocking entries — stops the plugin, changes no file |
 | `update` | release, then let the manager update to the newest (or a given) version |
 | `remove` | release, then let the manager remove the package |
@@ -100,6 +101,7 @@ curl -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal-all
 | `/dsh-plugin-unlock/` | GET — the surface itself |
 | `/dsh-plugin-unlock/status[?name=…]` | GET |
 | `/dsh-plugin-unlock/in-use[?name=…]` | GET |
+| `/dsh-plugin-unlock/runtime` | GET — where the Host runs pnpm from, and whether it is there |
 | `/dsh-plugin-unlock/release` | POST `{name?}` |
 | `/dsh-plugin-unlock/update` | POST `{name, version?}` |
 | `/dsh-plugin-unlock/remove` | POST `{name}` |
@@ -139,14 +141,15 @@ Every repair is appended to `~/.dsh/plugins-data/dsh-plugin-unlock/report.jsonl`
 - **The manager says `stop-profile`** — the Host runs without HMR and cannot hot-remove anything; restart DSH.
 - **A fiber refuses to dispose** (its teardown throws) — the plugin reports `needsRestart` and leaves the profile untouched. Restart DSH, then retry the update.
 - **The bundle comes from a pinned Git commit** — there is no version to update *to*; the plugin releases the block and tells you to retry the marketplace, which then removes and reinstalls from the new spec.
+- **The runtime payload is missing** — a different defect that looks like the same one. The desktop runs every install and removal through the pnpm it ships at `resources/runtime/primary-runtime/dependencies/pnpm/bin/pnpm.mjs`. If that file is gone (an interrupted update, a half-unpacked or copied installation, a cleaner that emptied `resources/runtime`), the operation fails *after* the lock is cleared, with `MODULE_NOT_FOUND … pnpm.mjs` or `ERR_PNPM_UNEXPECTED_STORE`. Clearing fibers cannot bring a file back, so the plugin detects this up front, refuses to pretend, and answers `step: "runtime"` with `needsRuntimeRepair: true` and the exact path it checked. Repair or reinstall DeepSeek Harness, then retry. `action: "runtime"` (or `GET /dsh-plugin-unlock/runtime`) tells you which of the two problems you are looking at.
 
 ## Development
 
 ```bash
-node --test          # 57 unit tests, no dependencies
+node --test          # 66 unit tests, no dependencies
 ```
 
-`lib/keys.js` holds the single piece of knowledge the plugin is built on — the manager's own "in use" predicate — as pure functions, so the matching rules are testable without a Host. Everything else is I/O over injected services.
+`lib/keys.js` holds the single piece of knowledge the plugin is built on — the manager's own "in use" predicate — as pure functions, so the matching rules are testable without a Host. `lib/runtime.js` does the same for the other half of the problem: which pnpm the Host runs, where it should be, and whether it is there. Everything else is I/O over injected services.
 
 ## License
 

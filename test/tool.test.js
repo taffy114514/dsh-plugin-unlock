@@ -45,7 +45,7 @@ test('the tool definition is what the Host expects', () => {
   assert.equal(tool.parameters.type, 'object');
   assert.deepEqual(tool.parameters.required, ['action']);
   assert.equal(tool.parameters.additionalProperties, false);
-  assert.deepEqual(tool.parameters.properties.action.enum, ['status', 'in_use', 'release', 'update', 'remove', 'heal']);
+  assert.deepEqual(tool.parameters.properties.action.enum, ['status', 'in_use', 'runtime', 'release', 'update', 'remove', 'heal']);
   assert.equal(tool.output.schema.type, 'object');
   const rendered = tool.output.render({}, { ok: true });
   assert.deepEqual(rendered, [{ type: 'text', text: '{\n  "ok": true\n}' }]);

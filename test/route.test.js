@@ -71,7 +71,7 @@ test('the index describes the surface', async () => {
   await handler(request({ url: '/dsh-plugin-unlock' }), res);
   assert.equal(res.status, 200);
   assert.equal(res.json().plugin, 'dsh-plugin-unlock');
-  assert.equal(res.json().actions.length, 7);
+  assert.equal(res.json().actions.length, 8);
 });
 
 test('status answers with what blocks which bundle', async () => {
