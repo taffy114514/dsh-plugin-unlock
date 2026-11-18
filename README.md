@@ -137,6 +137,13 @@ clearing it — but three things around it did change, and 0.2.0 follows them:
   cancellation, not just an abandoned promise, so a slow registry stops early
   and `deadlineMs` (default 180 s) still bounds `updateBundle()`, which takes no
   signal.
+- **The preventive release is synchronous.** `reportOperation()` fires
+  `plugin-manager/operation` *without awaiting its listeners*, so a release that
+  first awaited `listBundles()` could lose the race against the manager's own
+  `deselect → reload → in-use check`. The preventive path now calls
+  `fiber.dispose()` in the same tick as the event — `dispose()` clears `fiber.uid`
+  before its first `await`, so the check has already passed by the time the
+  manager reaches it — and only then awaits the teardown to report it.
 - **Updates report progress by `requestId`.** Every update the plugin runs
   carries its own id, so it shows up in the Host's `plugin-manager/update-state`
   stream like a marketplace update instead of an unexplained silence. The id is

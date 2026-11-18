@@ -172,12 +172,13 @@ MIT
 - 每个管理器调用都有 `deadlineMs`（默认 180 秒）兜底：注册表拉取或 pnpm 安装卡住时返回超时，而不是永远等下去。
 - 自动修复永远不会碰本插件自己的 fiber，也不会碰 `@deepseek-ai/dsh-base` 这类核心 bundle。
 
-## 0.2.0：适配 DeepSeek Harness 0.2.2-rc.5
+## 0.2.0 / 0.2.1：适配 DeepSeek Harness 0.2.2-rc.5
 
 判据本身没变（还是 `bundle-in-use` 看 `fiber.uid`，还是 `Fiber.dispose()` 清零），变的是它周围的三件事：
 
 - **多了一种失败方式：`incompatible-version`。** 目标版本的 `engines.dsh` / `peerDependencies` 不接受当前 Harness 时，管理器直接拒绝；`listVersions()` 会给这些版本打上 `incompatible`。所以插件不再盲取 `versions[0]`：它挑当前 Harness 接受的最新版本，把跳过的版本列在 `skippedIncompatible` 里；当**所有**更新的版本都不兼容时，它照样解除锁，但一个包都不装，返回 `step: "compatible-version"` 和 `needsCompatibleVersion: true`，不会让你误以为锁还在。
 - **注册表查询支持 `AbortSignal`。** `deadlineMs`（默认 180 秒）现在是真正的取消，而不只是丢弃一个 promise；`updateBundle()` 不接受 signal，仍由超时兜底。
+- **抢先释放改成了同步的。** `reportOperation()` 广播 `plugin-manager/operation` 时**不等监听器返回**，所以先 `await listBundles()` 再去 dispose 有可能输给管理器自己的 `deselect → reload → 检查 fiber.uid`。现在 preventative 路径在收到事件的同一个 tick 里就调 `fiber.dispose()`（`dispose()` 在第一个 `await` 之前就把 `fiber.uid` 清空），之后才 await teardown 汇报结果——检查到它的时候锁早没了。
 - **更新带 `requestId`。** 插件发起的每次更新都有自己的 id，会像市场更新一样出现在 Host 的 `plugin-manager/update-state` 进度流里，结果里也会返回这个 id，方便对上管理器的日志。
 
 `status` 的 `runtime` 里现在还多了 `dshVersion`（从 `<安装目录>/resources/app/dsh/package.json` 读），和 pnpm 载荷状态并排显示——"版本比 Harness 还老"这件事直接写在答案里。

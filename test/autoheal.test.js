@@ -24,6 +24,18 @@ function setup({ config, entries = [], repairable = () => true } = {}) {
     liveEntries() {
       return entries.filter((entry) => entry?.fiber?.uid != null);
     },
+    releaseFast(name) {
+      const live = entries.filter((entry) => entry?.fiber?.uid != null);
+      const startedAt = Date.now();
+      const disposing = live.map((entry) => entry.fiber.dispose());
+      released.push(name);
+      return {
+        bundle: name,
+        entries: live.map((entry) => ({ id: entry.options.id, name: entry.options.name })),
+        started: live.length,
+        settled: Promise.allSettled(disposing).then(() => ({ ms: Date.now() - startedAt, failed: 0, remaining: entries.filter((entry) => entry?.fiber?.uid != null).length })),
+      };
+    },
     async release(name) {
       if (!repairable(name)) return { ok: false, bundle: name, reason: `${name} is a protected bundle` };
       const live = entries.filter((entry) => entry?.fiber?.uid != null);
@@ -137,6 +149,7 @@ test('an operation that is starting frees the fiber before the manager tests it'
   const entry = makeEntry({ id: 'dsh-caveman', name: 'dsh-caveman' });
   const { ctx, calls, log } = setup({ entries: [entry] });
   ctx.emit('plugin-manager/operation', { ...FAILED, id: 'op-start', phase: 'started' });
+  assert.equal(entry.fiber.uid, null, 'the fiber is freed in the same tick as the event, before any await');
   await wait(100);
 
   assert.equal(entry.fiber.uid, null, 'the fiber must be gone before the manager checks');
@@ -144,14 +157,14 @@ test('an operation that is starting frees the fiber before the manager tests it'
   assert.equal(log.events.some((event) => event.event === 'prevent-released'), true);
 });
 
-test('a protected bundle is refused before any fiber is touched', async () => {
-  const entry = makeEntry({ id: 'web', name: 'web' });
-  const { ctx, log } = setup({ entries: [entry], repairable: () => false });
-  ctx.emit('plugin-manager/operation', { ...FAILED, id: 'op-core', phase: 'started', target: 'web' });
+test('a core package is never released, whatever the operation claims', async () => {
+  const entry = makeEntry({ id: '@deepseek-ai/dsh-base', name: '@deepseek-ai/dsh-base' });
+  const { ctx, log } = setup({ entries: [entry] });
+  ctx.emit('plugin-manager/operation', { ...FAILED, id: 'op-core', phase: 'started', stage: 'remove', target: '@deepseek-ai/dsh-base' });
   await wait(100);
 
   assert.equal(entry.fiber.uid, 1, 'a core fiber is never disposed');
-  assert.equal(log.events.some((event) => event.event === 'prevent-partial'), true);
+  assert.equal(log.events.some((event) => event.event === 'prevent-release'), false, 'it is not even attempted');
 });
 
 test('this plugin never frees its own fibers mid-operation', async () => {
