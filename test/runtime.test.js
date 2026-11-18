@@ -45,8 +45,8 @@ test('a missing payload is reported with the path that was checked', () => {
   assert.equal(probe.ok, false);
   assert.equal(probe.pnpmPath, join(runtimeRoot, ...PNPM_ENTRY));
   assert.equal(probe.runtimeJson, false);
-  assert.match(runtimeHint(probe), /runtime payload/);
-  assert.match(runtimeHint(probe), /reinstall/);
+  assert.match(runtimeHint(probe), /运行时 payload/);
+  assert.match(runtimeHint(probe), /重装/);
 });
 
 test('an env var pointing at nothing does not hide a working payload', () => {

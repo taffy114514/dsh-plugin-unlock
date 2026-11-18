@@ -63,7 +63,7 @@ test('each action reaches the matching engine call', async () => {
   const status = await tool.execute({ action: 'status', name: 'dsh-caveman' });
   assert.equal(status.ok, true);
   assert.equal(status.action, 'status');
-  assert.match(status.hint, /blocked by 1 live loader entry/);
+  assert.match(status.hint, /个存活的 loader 条目挡住/);
 
   const inUse = await tool.execute({ action: 'in_use' });
   assert.deepEqual(inUse.blocked.length, 1);
@@ -88,7 +88,7 @@ test('an unknown or missing action is answered, not thrown', async () => {
   const tool = createUnlockTool(fakeRepair());
   const unknown = await tool.execute({ action: 'explode' });
   assert.equal(unknown.ok, false);
-  assert.match(unknown.reason, /unknown action/);
+  assert.match(unknown.reason, /未知的 action/);
   const none = await tool.execute({});
   assert.equal(none.action, 'status');
   const nothing = await tool.execute(undefined);
@@ -115,9 +115,9 @@ test('a status result without a blocked bundle gets a matching hint', async () =
     },
   });
   const tool = createUnlockTool(repair);
-  assert.match((await tool.execute({ action: 'status' })).hint, /No bundle is blocked/);
-  assert.match((await tool.execute({ action: 'status', name: 'x' })).hint, /not blocked/);
-  assert.match((await tool.execute({ action: 'status', name: 'y' })).hint, /not a bundle this profile lists/);
+  assert.match((await tool.execute({ action: 'status' })).hint, /当前没有被挡住的插件包/);
+  assert.match((await tool.execute({ action: 'status', name: 'x' })).hint, /没有被挡住/);
+  assert.match((await tool.execute({ action: 'status', name: 'y' })).hint, /不在这个 profile 的插件包里/);
 });
 
 test('every action returns lossless JSON, with no undefined values', async () => {

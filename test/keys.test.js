@@ -80,8 +80,8 @@ test('describeEntry is JSON safe and carries the source when one is exposed', ()
 });
 
 test('summarize names the blocking entries', () => {
-  assert.equal(summarize('a', []), 'a: no live entry blocks it');
+  assert.equal(summarize('a', []), 'a：没有存活条目挡着');
   const summary = summarize('dsh-caveman', [makeEntry({ id: 'dsh-caveman' }), makeEntry({ id: 'dsh-caveman/ui', name: 'dsh-caveman' })]);
-  assert.match(summary, /2 live entries/);
+  assert.match(summary, /2 个存活条目/);
   assert.match(summary, /dsh-caveman, dsh-caveman\/ui/);
 });

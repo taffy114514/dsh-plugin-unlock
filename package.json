@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-unlock",
-  "version": "0.2.1",
-  "description": "Force-release DSH plugins that are stuck \"in use\" so the desktop marketplace can update or remove them again.",
+  "version": "0.2.2",
+  "description": "释放 DSH 里被卡在「正在使用中」状态的插件，让桌面端市场能重新更新或卸载它们。",
   "type": "module",
   "license": "MIT",
   "author": "YG",

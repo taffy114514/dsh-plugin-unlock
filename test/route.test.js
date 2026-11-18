@@ -157,7 +157,7 @@ test('wrong method, unknown route and bad JSON are answered, never thrown', asyn
   const badJson = response();
   await handler(request({ method: 'POST', url: '/dsh-plugin-unlock/heal', body: '{oops' }), badJson);
   assert.equal(badJson.status, 500);
-  assert.match(badJson.json().error, /not valid JSON/);
+  assert.match(badJson.json().error, /不是合法的 JSON/);
 });
 
 test('an engine failure becomes a 500 with the message', async () => {

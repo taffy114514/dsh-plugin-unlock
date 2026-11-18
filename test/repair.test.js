@@ -286,7 +286,7 @@ test('update releases the lock but refuses to fake an install it cannot run', as
   assert.equal(result.ok, false);
   assert.equal(result.step, 'runtime');
   assert.equal(result.needsRuntimeRepair, true);
-  assert.match(result.runtime.hint, /runtime payload/);
+  assert.match(result.runtime.hint, /运行时 payload/);
   assert.equal(entry.fiber.uid, null, 'the lock is still cleared first');
   assert.equal(manager.calls.updateBundle.length, 0, 'the manager is not asked to install what cannot install');
 });
@@ -372,7 +372,7 @@ test('release by name refuses a bundle the manager calls not-removable', async (
 
   const result = await repair.release('@deepseek-ai/dsh-base');
   assert.equal(result.ok, false);
-  assert.match(result.reason, /official/);
+  assert.match(result.reason, /官方/);
   assert.match(result.reason, /not-removable/);
   assert.notEqual(core.fiber.uid, null);
   assert.equal(manager.calls.removeBundle.length, 0);
@@ -451,7 +451,7 @@ test('an update the Harness refuses as incompatible is named, not blamed on the 
   assert.equal(result.ok, false);
   assert.equal(result.step, 'compatible-version');
   assert.equal(result.needsCompatibleVersion, true);
-  assert.match(result.reason, /incompatible/);
+  assert.match(result.reason, /不兼容/);
   assert.equal(log.events.at(-1).event, 'update');
 });
 
