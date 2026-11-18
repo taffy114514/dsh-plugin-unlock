@@ -5,6 +5,14 @@
   "type": "module",
   "license": "MIT",
   "author": "YG",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taffy114514/dsh-plugin-unlock.git"
+  },
+  "homepage": "https://github.com/taffy114514/dsh-plugin-unlock#readme",
+  "bugs": {
+    "url": "https://github.com/taffy114514/dsh-plugin-unlock/issues"
+  },
   "keywords": [
     "dsh-plugin",
     "dsh",
@@ -25,6 +33,7 @@
     "lib/*.js",
     "cordis.patch.yml",
     "icon.svg",
+    "assets/icon-180.png",
     "README.md",
     "README.zh.md",
     "LICENSE"
