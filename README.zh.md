@@ -85,19 +85,22 @@ Host 本体。`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app` 和其它官�
 
 ### HTTP（不想通过助手时）
 
-路由挂在 Host 自己的 web server 上，走它原有的请求鉴权。
+路由挂在 Host 自己的 web server 上，走它原有的请求鉴权：认的是 GUI 自己发的那枚签名浏览器 cookie，没有它就返回 `401 {"ok":false,"error":"unauthorized"}`。从浏览器 DevTools 里（Application → Cookies）把 cookie 复制出来塞进 `-b`，或者干脆用工具、跳过这一节。
 
 ```bash
+# GUI 手里已有的那枚 cookie
+COOKIE='dsh-…=<value>'
+
 # 现在有什么被挡住了？
-curl http://127.0.0.1:64511/dsh-plugin-unlock/status
+curl -s -b "$COOKIE" http://127.0.0.1:64511/dsh-plugin-unlock/status
 
 # 释放并把更新做完
-curl -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal \
+curl -s -b "$COOKIE" -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal \
      -H 'content-type: application/json' \
      -d '{"name":"dsh-caveman"}'
 
 # 把所有被挡的都修一遍
-curl -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal-all
+curl -s -b "$COOKIE" -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal-all
 ```
 
 | 路由 | 方法 |

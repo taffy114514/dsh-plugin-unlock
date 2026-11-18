@@ -85,19 +85,22 @@ The Host itself. `@deepseek-ai/dsh-base`, `@deepseek-ai/dsh-web-app` and every o
 
 ### HTTP, when you would rather not ask the assistant
 
-The routes are mounted on the Host's own web server and use its normal request authentication.
+The routes are mounted on the Host's own web server and use its normal request authentication: they accept the same signed browser cookie the GUI itself sends, and answer `401 {"ok":false,"error":"unauthorized"}` without it. Copy the cookie out of your browser's DevTools (Application → Cookies) into `-b`, or just use the tool and skip this section.
 
 ```bash
+# the cookie the GUI already holds
+COOKIE='dsh-…=<value>'
+
 # what is blocked?
-curl http://127.0.0.1:64511/dsh-plugin-unlock/status
+curl -s -b "$COOKIE" http://127.0.0.1:64511/dsh-plugin-unlock/status
 
 # release and finish the update
-curl -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal \
+curl -s -b "$COOKIE" -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal \
      -H 'content-type: application/json' \
      -d '{"name":"dsh-caveman"}'
 
 # repair everything that is blocked
-curl -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal-all
+curl -s -b "$COOKIE" -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal-all
 ```
 
 | route | method |
