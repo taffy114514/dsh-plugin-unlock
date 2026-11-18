@@ -71,7 +71,7 @@ The Host itself. `@deepseek-ai/dsh-base`, `@deepseek-ai/dsh-web-app` and every o
 
 | action | what it does |
 | --- | --- |
-| `status` | every bundle in the profile, whether it is blocked, and by which entries |
+| `status` | a summary of every installed bundle: blocked or not, and how many entries hold it. Pass `name` to see those entries |
 | `in_use` | only the blocked bundles |
 | `runtime` | whether the pnpm payload the Host installs through is actually on disk |
 | `release` | dispose the blocking entries — stops the plugin, changes no file |

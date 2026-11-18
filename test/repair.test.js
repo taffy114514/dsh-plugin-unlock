@@ -37,9 +37,12 @@ test('status names the bundles a removal would be blocked by', async () => {
   assert.equal(status.counts.bundles, 2);
   assert.equal(status.counts.blocked, 1);
   assert.equal(status.blocked[0].name, 'dsh-caveman');
-  assert.equal(status.blocked[0].entries[0].id, 'dsh-caveman');
+  assert.equal(status.blocked[0].entries, 1, 'a summary counts the entries instead of dumping them');
   assert.equal(status.services.pluginManager, true);
   assert.equal(status.services.tools, false);
+
+  const detail = await repair.status({ name: 'dsh-caveman' });
+  assert.equal(detail.bundles[0].blockedBy[0].id, 'dsh-caveman', 'asking by name still gives the entries');
 });
 
 test('status reports a missing pluginManager instead of throwing', async () => {

@@ -71,7 +71,7 @@ Host 本体。`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app` 和其它官�
 
 | action | 作用 |
 | --- | --- |
-| `status` | 列出 profile 里所有 bundle、是否被挡、被哪些条目挡 |
+| `status` | 每个已装 bundle 的一行摘要：有没有被挡、被几个条目挡住；给 `name` 才展开那些条目 |
 | `in_use` | 只列被挡的 |
 | `runtime` | Host 跑安装用的那份 pnpm 到底在不在盘上 |
 | `release` | 释放挡路条目（停掉插件，不动任何文件） |
