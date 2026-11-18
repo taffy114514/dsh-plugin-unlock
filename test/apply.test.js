@@ -92,3 +92,42 @@ test('the registered tool reports the block through the live services', async ()
   assert.equal(heal.to, '1.2.0');
   assert.equal(entry.fiber.uid, null);
 });
+
+test('apply waits for tools and webServer when the Host mounts them late', () => {
+  const pending = [];
+  const registered = { tools: [], routes: [] };
+  const services = {
+    pluginManager: makeManager({ bundles: BUNDLES, rows: ROWS }),
+    loader: makeLoader([]),
+    hmr: {},
+  };
+  const ctx = makeCtx(services);
+  // A cold boot can apply this bundle before the services it talks to exist;
+  // cordis answers with inject(), which runs the callback once they are up.
+  ctx.inject = (deps, callback) => {
+    pending.push({ deps, callback });
+    return () => {};
+  };
+
+  apply(ctx, {});
+  assert.equal(registered.tools.length, 0, 'nothing is registered while the services are missing');
+  assert.equal(pending.length, 2, 'one injection per service');
+
+  services.tools = {
+    register(definition) {
+      registered.tools.push(definition);
+      return () => {};
+    },
+  };
+  services.webServer = {
+    register(options) {
+      registered.routes.push(options);
+      return () => {};
+    },
+  };
+  const host = makeCtx(services);
+  for (const { callback } of pending) callback(host);
+
+  assert.deepEqual(registered.tools.map((tool) => tool.name), ['plugin_unlock']);
+  assert.equal(registered.routes.length, 1);
+});

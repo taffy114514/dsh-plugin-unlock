@@ -27,6 +27,7 @@ No file is wrong in that state. Only the running composition is. That is why “
 
 ## What the plugin does
 
+0. **Get there first**: when the manager reports an operation that is *starting* (`phase: "started"`, stage `remove` or `update`), the plugin frees that bundle's fibers before the manager's own `deselect → reload → in-use check` runs. The check then passes on the first try and the marketplace never shows the refusal at all.
 1. **Find** the entries that block a bundle, using the manager's own predicate — `pluginManager.bundleRows(name)` for the (id, name) pairs the manager compares, then the live loader entries that match them.
 2. **Release** them: `await entry.fiber.dispose()` for each, which clears `fiber.uid` and runs the plugin's teardown.
 3. **Finish the job**: `pluginManager.updateBundle(name, version)` (or `removeBundle(name)`) now passes its own gate and does the real work.
@@ -59,9 +60,12 @@ No dependencies. Node ≥ 22, which DSH already requires.
 
 ### Automatic (default)
 
-When the marketplace's update or removal fails with `bundle-in-use`, the failure is reported on `plugin-manager/operation`. The plugin picks it up, releases the fibers, and re-runs the manager's update. You see the update succeed instead of the refusal.
+Two paths, and the first one is why the button usually just works:
 
-Guard rails: one automatic repair per bundle per 10 minutes, never twice for the same operation, never for a bundle it is already repairing, and a 500 ms pause so the failed operation's file lock is released first.
+- **Before the check.** Every management operation is announced on `plugin-manager/operation` with `phase: "started"`. When the stage is `remove` or `update`, the plugin disposes that bundle's surviving fibers right then — before the manager deselects, reloads and tests for a live fiber. The gate passes, pnpm runs, the new version mounts.
+- **After a failure.** If an operation still settles as `failed` with `errorCode: "bundle-in-use"` (an older Host, a race, a bundle reloaded by something else), the plugin releases the fibers and hands the bundle back to `updateBundle()` itself.
+
+Guard rails: one automatic repair per bundle per 10 minutes, never twice for the same operation, never for a bundle it is already repairing, never for this plugin's own fibers, and a 500 ms pause so the failed operation's file lock is released first. Every manager call is bounded by `deadlineMs` (3 minutes), so a stalled registry fetch reports a timeout instead of waiting forever.
 
 ### What it deliberately never touches
 
@@ -153,7 +157,7 @@ Every repair is appended to `~/.dsh/plugins-data/dsh-plugin-unlock/report.jsonl`
 ## Development
 
 ```bash
-node --test          # 71 unit tests, no dependencies
+node --test          # 77 unit tests, no dependencies
 ```
 
 `lib/keys.js` holds the single piece of knowledge the plugin is built on — the manager's own "in use" predicate — as pure functions, so the matching rules are testable without a Host. `lib/runtime.js` does the same for the other half of the problem: which pnpm the Host runs, where it should be, and whether it is there. Everything else is I/O over injected services.

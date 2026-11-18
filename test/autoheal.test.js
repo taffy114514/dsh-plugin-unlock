@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { normalizeConfig } from '../lib/config.js';
 import { registerAutoHeal } from '../lib/autoheal.js';
-import { makeCtx, makeLog } from './fakes.js';
+import { makeCtx, makeEntry, makeLog } from './fakes.js';
 
 const SETTLE_WAIT_MS = 650;
 
@@ -13,13 +13,24 @@ function wait(ms = SETTLE_WAIT_MS) {
   });
 }
 
-function setup({ config } = {}) {
+function setup({ config, entries = [], repairable = () => true } = {}) {
   const log = makeLog();
   const resolvedConfig = normalizeConfig(config ?? {});
   const state = { healing: new Set(), inFlight: new Set(), attempts: new Map() };
   const calls = [];
+  const released = [];
   const repair = {
     inCooldown: () => false,
+    liveEntries() {
+      return entries.filter((entry) => entry?.fiber?.uid != null);
+    },
+    async release(name) {
+      if (!repairable(name)) return { ok: false, bundle: name, reason: `${name} is a protected bundle` };
+      const live = entries.filter((entry) => entry?.fiber?.uid != null);
+      for (const entry of live) await entry.fiber.dispose();
+      released.push(name);
+      return { ok: true, released: [{ bundle: name, ok: true, steps: [], remaining: [] }] };
+    },
     async heal(name, options) {
       calls.push({ name, options });
       state.attempts.set(name, Date.now());
@@ -28,7 +39,7 @@ function setup({ config } = {}) {
   };
   const ctx = makeCtx();
   const dispose = registerAutoHeal({ ctx, repair, config: resolvedConfig, state, log });
-  return { ctx, log, state, calls, repair, dispose, config: resolvedConfig };
+  return { ctx, log, state, calls, released, repair, dispose, config: resolvedConfig, entries };
 }
 
 const FAILED = Object.freeze({
@@ -119,4 +130,42 @@ test('a context without an event channel is tolerated', () => {
   assert.equal(typeof dispose, 'function');
   dispose();
   assert.equal(log.events.at(-1).event, 'autoheal-unavailable');
+});
+
+
+test('an operation that is starting frees the fiber before the manager tests it', async () => {
+  const entry = makeEntry({ id: 'dsh-caveman', name: 'dsh-caveman' });
+  const { ctx, calls, log } = setup({ entries: [entry] });
+  ctx.emit('plugin-manager/operation', { ...FAILED, id: 'op-start', phase: 'started' });
+  await wait(100);
+
+  assert.equal(entry.fiber.uid, null, 'the fiber must be gone before the manager checks');
+  assert.deepEqual(calls, [], 'a preventive release never finishes the update on its own');
+  assert.equal(log.events.some((event) => event.event === 'prevent-released'), true);
+});
+
+test('a protected bundle is refused before any fiber is touched', async () => {
+  const entry = makeEntry({ id: 'web', name: 'web' });
+  const { ctx, log } = setup({ entries: [entry], repairable: () => false });
+  ctx.emit('plugin-manager/operation', { ...FAILED, id: 'op-core', phase: 'started', target: 'web' });
+  await wait(100);
+
+  assert.equal(entry.fiber.uid, 1, 'a core fiber is never disposed');
+  assert.equal(log.events.some((event) => event.event === 'prevent-partial'), true);
+});
+
+test('this plugin never frees its own fibers mid-operation', async () => {
+  const entry = makeEntry({ id: 'dsh-plugin-unlock', name: 'dsh-plugin-unlock' });
+  const { ctx } = setup({ entries: [entry] });
+  ctx.emit('plugin-manager/operation', { ...FAILED, id: 'op-self', phase: 'started', target: 'dsh-plugin-unlock' });
+  await wait(100);
+  assert.equal(entry.fiber.uid, 1);
+});
+
+test('an install that is starting is left alone', async () => {
+  const entry = makeEntry({ id: 'dsh-caveman', name: 'dsh-caveman' });
+  const { ctx } = setup({ entries: [entry] });
+  ctx.emit('plugin-manager/operation', { ...FAILED, id: 'op-install', phase: 'started', stage: 'install' });
+  await wait(100);
+  assert.equal(entry.fiber.uid, 1);
 });

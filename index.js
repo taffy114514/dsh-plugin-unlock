@@ -47,23 +47,41 @@ export function apply(ctx, rawConfig) {
   };
   const repair = createRepair({ ctx, config, state, log });
 
-  ctx.effect(() => {
-    const tools = ctx.get('tools');
-    if (!tools || typeof tools.register !== 'function') {
-      log('tool-unavailable', { reason: 'the tools service is not available' });
-      return () => {};
-    }
-    try {
-      const dispose = tools.register(createUnlockTool(repair));
-      log('tool-registered', { tool: 'plugin_unlock' });
-      return typeof dispose === 'function' ? dispose : () => {};
-    } catch (error) {
-      log('tool-failed', { message: error instanceof Error ? error.message : String(error) });
-      return () => {};
-    }
-  }, 'dsh-plugin-unlock: tool');
+  // `tools` and `webServer` may mount after this bundle: on a cold boot the
+  // marketplace's layers can come up before the services they talk to. Sampling
+  // `ctx.get()` once in an effect then quietly registers nothing, which is how
+  // 0.1.3 ended up loaded but invisible. `ctx.inject()` waits for the service.
+  const inject = typeof ctx.inject === 'function' ? ctx.inject.bind(ctx) : null;
 
-  ctx.effect(() => registerRoutes({ ctx, repair, config, log }), 'dsh-plugin-unlock: routes');
+  const mountTool = (host) => {
+    host.effect(() => {
+      const tools = host.get('tools');
+      if (!tools || typeof tools.register !== 'function') {
+        log('tool-unavailable', { reason: 'the tools service is not available' });
+        return () => {};
+      }
+      try {
+        const dispose = tools.register(createUnlockTool(repair));
+        log('tool-registered', { tool: 'plugin_unlock' });
+        return typeof dispose === 'function' ? dispose : () => {};
+      } catch (error) {
+        log('tool-failed', { message: error instanceof Error ? error.message : String(error) });
+        return () => {};
+      }
+    }, 'dsh-plugin-unlock: tool');
+  };
+
+  const mountRoutes = (host) => {
+    host.effect(() => registerRoutes({ ctx: host, repair, config, log }), 'dsh-plugin-unlock: routes');
+  };
+
+  if (inject) {
+    inject(['tools'], mountTool);
+    inject(['webServer'], mountRoutes);
+  } else {
+    mountTool(ctx);
+    mountRoutes(ctx);
+  }
 
   if (config.autoFix) {
     ctx.effect(() => registerAutoHeal({ ctx, repair, config, state, log }), 'dsh-plugin-unlock: auto-heal');

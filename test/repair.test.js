@@ -389,3 +389,19 @@ test('heal on a core bundle stops at the refusal instead of asking for a restart
   assert.equal(manager.calls.updateBundle.length, 0);
   assert.equal(manager.calls.removeBundle.length, 0);
 });
+
+test('a manager call that never answers becomes a timeout, not a hang', async () => {
+  const entry = makeEntry({ id: 'dsh-caveman', name: 'dsh-caveman' });
+  const manager = makeManager({ bundles: BUNDLES, rows: ROWS });
+  // A registry fetch (or the pnpm install behind updateBundle) can stall on a
+  // flaky network; the repair must report that instead of waiting forever.
+  manager.listVersions = () => new Promise(() => {});
+  const { repair, log } = setup({ entries: [entry], manager, config: { deadlineMs: 20 } });
+
+  const result = await repair.update('dsh-caveman');
+  assert.equal(result.ok, false);
+  assert.equal(result.timedOut, true);
+  assert.equal(result.refusal.reason.code, 'unlock-timeout');
+  assert.equal(entry.fiber.uid, null, 'the release still happened first');
+  assert.equal(log.events.some((event) => event.event === 'update-timeout'), true);
+});

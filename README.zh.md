@@ -153,7 +153,7 @@ curl -s -b "$COOKIE" -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal-all
 ## 开发
 
 ```bash
-node --test          # 71 个单元测试，零依赖
+node --test          # 77 个单元测试，零依赖
 ```
 
 `lib/runtime.js` 处理另一半问题：Host 到底用哪份 pnpm、它该在哪、在不在。`lib/keys.js` 里放着这个插件唯一的核心知识——管理器自己那套"是否在使用中"的判据——写成纯函数，所以匹配规则不需要 Host 就能测。其余都是对注入服务的 I/O。
@@ -161,3 +161,13 @@ node --test          # 71 个单元测试，零依赖
 ## 许可
 
 MIT
+
+## 0.1.4：先释放，再让管理器检查
+
+0.1.3 之前只有在市场报错之后才补救。0.1.4 改成抢先一步：
+
+- 管理器每次操作都会在 `plugin-manager/operation` 上广播 `phase: "started"`。只要阶段是 `remove` 或 `update`，插件立刻释放该 bundle 残留的 fiber——赶在管理器 `deselect → reload → 检查 fiber.uid` 之前。检查一次通过，pnpm 正常执行，市场根本不会弹出"这个插件正在使用中"。
+- 万一某次仍然以 `errorCode: "bundle-in-use"` 失败（老版本 Host、竞态、被别的插件重新挂载），插件再按原来的路径补救：释放后自己接管 `updateBundle()`。
+- 0.1.3 又踩了一个冷启动的坑：`tools` / `webServer` 可能比本插件晚挂载，一次性 `ctx.get()` 会静默注册空效果，插件"加载了但看不见"。0.1.4 改用 `ctx.inject(['tools'])` / `ctx.inject(['webServer'])`，等服务就绪再注册。
+- 每个管理器调用都有 `deadlineMs`（默认 180 秒）兜底：注册表拉取或 pnpm 安装卡住时返回超时，而不是永远等下去。
+- 自动修复永远不会碰本插件自己的 fiber，也不会碰 `@deepseek-ai/dsh-base` 这类核心 bundle。
