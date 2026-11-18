@@ -63,6 +63,10 @@ When the marketplace's update or removal fails with `bundle-in-use`, the failure
 
 Guard rails: one automatic repair per bundle per 10 minutes, never twice for the same operation, never for a bundle it is already repairing, and a 500 ms pause so the failed operation's file lock is released first.
 
+### What it deliberately never touches
+
+The Host itself. `@deepseek-ai/dsh-base`, `@deepseek-ai/dsh-web-app` and every other official or installation bundle keep dozens of live fibers by design — that is the running app, not a stuck update. The manager answers `not-removable` for them long before it reaches the in-use check, so their entries are reported under `blockedBy` and never disposed. Only bundles this profile installed itself (`availability: "profile"`, `removable: true`) are eligible, and `release` refuses anything else by name instead of tearing the Host apart.
+
 ### The `plugin_unlock` tool
 
 | action | what it does |
@@ -146,7 +150,7 @@ Every repair is appended to `~/.dsh/plugins-data/dsh-plugin-unlock/report.jsonl`
 ## Development
 
 ```bash
-node --test          # 66 unit tests, no dependencies
+node --test          # 71 unit tests, no dependencies
 ```
 
 `lib/keys.js` holds the single piece of knowledge the plugin is built on — the manager's own "in use" predicate — as pure functions, so the matching rules are testable without a Host. `lib/runtime.js` does the same for the other half of the problem: which pnpm the Host runs, where it should be, and whether it is there. Everything else is I/O over injected services.

@@ -63,6 +63,10 @@ pnpm add github:YG/dsh-plugin-unlock
 
 护栏：同一个 bundle 10 分钟内只自动修一次；同一次操作不重复；自己正在修的 bundle 不重入；失败操作先等 500 ms，让文件锁释放完。
 
+### 它故意永远不动的东西
+
+Host 本体。`@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app` 和其它官方/安装自带 bundle 天生就有几十个常驻 fiber——那是跑着的应用，不是卡住的更新。管理器对它们给的是 `not-removable`，远早于"占用"检查，所以它们的条目只在 `blockedBy` 里被报告、永不被释放。只有这个 profile 自己装的 bundle（`availability: "profile"`、`removable: true`）才会被处理；按名字指名一个核心 bundle 时，`release` 会直接回绝，而不是把 Host 拆掉。
+
 ### `plugin_unlock` 工具
 
 | action | 作用 |
@@ -146,7 +150,7 @@ curl -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal-all
 ## 开发
 
 ```bash
-node --test          # 66 个单元测试，零依赖
+node --test          # 71 个单元测试，零依赖
 ```
 
 `lib/runtime.js` 处理另一半问题：Host 到底用哪份 pnpm、它该在哪、在不在。`lib/keys.js` 里放着这个插件唯一的核心知识——管理器自己那套"是否在使用中"的判据——写成纯函数，所以匹配规则不需要 Host 就能测。其余都是对注入服务的 I/O。

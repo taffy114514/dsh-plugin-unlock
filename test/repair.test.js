@@ -313,3 +313,76 @@ test('a manager failure that names pnpm is reported as a runtime problem', async
   assert.equal(result.needsRuntimeRepair, true);
   assert.equal(result.error.code, 'MODULE_NOT_FOUND');
 });
+
+// ── core bundles are reported, never released ────────────────────────────────
+// The running Host is made of these fibers. Reporting them as "blocked" would
+// invite a release that disposes the Host itself.
+
+const CORE_ROWS = {
+  '@deepseek-ai/dsh-base': [{ id: 'timer', name: '@deepseek-ai/dsh-base' }],
+  '@deepseek-ai/dsh-web-app': [{ id: 'web', name: '@deepseek-ai/dsh-web-app' }],
+  'dsh-caveman': [{ id: 'dsh-caveman', name: 'dsh-caveman' }],
+};
+const CORE_BUNDLES = [
+  { name: '@deepseek-ai/dsh-base', version: '1.0.0', enabled: true, installed: true, official: true, availability: 'installation', removable: false },
+  { name: '@deepseek-ai/dsh-web-app', version: '1.0.0', enabled: true, installed: true, official: true, availability: 'installation', removable: false },
+  { name: 'dsh-caveman', version: '1.0.0', enabled: true, installed: true, official: false, availability: 'profile', removable: true },
+];
+
+test('core bundles with live fibers are not counted as blocked', async () => {
+  const manager = makeManager({ bundles: CORE_BUNDLES, rows: CORE_ROWS });
+  const { repair } = setup({
+    entries: [makeEntry({ id: 'timer', name: '@deepseek-ai/dsh-base' }), makeEntry({ id: 'dsh-caveman', name: 'dsh-caveman' })],
+    manager,
+  });
+
+  const status = await repair.status();
+  assert.equal(status.counts.bundles, 3);
+  assert.equal(status.counts.blocked, 1, 'only the profile bundle the marketplace could refuse');
+  assert.equal(status.blocked[0].name, 'dsh-caveman');
+  const core = status.bundles.find((bundle) => bundle.name === '@deepseek-ai/dsh-base');
+  assert.equal(core.blocked, false);
+  assert.equal(core.repairable, false);
+
+  const single = await repair.status({ name: '@deepseek-ai/dsh-base' });
+  assert.equal(single.bundles[0].blockedBy.length, 1, 'asked by name, the raw entry is still visible');
+});
+
+test('release without a name never touches a core bundle', async () => {
+  const manager = makeManager({ bundles: CORE_BUNDLES, rows: CORE_ROWS });
+  const core = makeEntry({ id: 'timer', name: '@deepseek-ai/dsh-base' });
+  const plugin = makeEntry({ id: 'dsh-caveman', name: 'dsh-caveman' });
+  const { repair } = setup({ entries: [core, plugin], manager });
+
+  const result = await repair.release();
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.released.map((row) => row.bundle), ['dsh-caveman']);
+  assert.notEqual(core.fiber.uid, null, 'the Host fiber is untouched');
+  assert.equal(plugin.fiber.uid, null);
+});
+
+test('release by name refuses a bundle the manager calls not-removable', async () => {
+  const manager = makeManager({ bundles: CORE_BUNDLES, rows: CORE_ROWS });
+  const core = makeEntry({ id: 'timer', name: '@deepseek-ai/dsh-base' });
+  const { repair } = setup({ entries: [core], manager });
+
+  const result = await repair.release('@deepseek-ai/dsh-base');
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /official/);
+  assert.match(result.reason, /not-removable/);
+  assert.notEqual(core.fiber.uid, null);
+  assert.equal(manager.calls.removeBundle.length, 0);
+  assert.equal(manager.calls.updateBundle.length, 0);
+});
+
+test('heal on a core bundle stops at the refusal instead of asking for a restart', async () => {
+  const manager = makeManager({ bundles: CORE_BUNDLES, rows: CORE_ROWS });
+  const { repair } = setup({ entries: [makeEntry({ id: 'timer', name: '@deepseek-ai/dsh-base' })], manager });
+
+  const result = await repair.heal('@deepseek-ai/dsh-base');
+  assert.equal(result.ok, false);
+  assert.equal(result.step, 'release');
+  assert.equal(result.needsRestart, undefined);
+  assert.equal(manager.calls.updateBundle.length, 0);
+  assert.equal(manager.calls.removeBundle.length, 0);
+});

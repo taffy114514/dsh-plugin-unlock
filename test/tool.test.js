@@ -34,6 +34,10 @@ function fakeRepair(overrides = {}) {
       calls.push(['heal', name, options]);
       return { ok: true, step: 'update', bundle: name };
     },
+    runtime() {
+      calls.push(['runtime']);
+      return { ok: true, source: 'DSH_PRIMARY_RUNTIME', root: '/rt', pnpmPath: '/rt/dependencies/pnpm/bin/pnpm.mjs', runtimeJson: true, candidates: [], hint: null };
+    },
     ...overrides,
   };
   return repair;
@@ -114,4 +118,17 @@ test('a status result without a blocked bundle gets a matching hint', async () =
   assert.match((await tool.execute({ action: 'status' })).hint, /No bundle is blocked/);
   assert.match((await tool.execute({ action: 'status', name: 'x' })).hint, /not blocked/);
   assert.match((await tool.execute({ action: 'status', name: 'y' })).hint, /not a bundle this profile lists/);
+});
+
+test('every action returns lossless JSON, with no undefined values', async () => {
+  const tool = createUnlockTool(fakeRepair());
+  const cases = [{ action: 'runtime' }, { action: 'status' }, { action: 'in_use' }, { action: 'release', name: 'dsh-caveman' }];
+  for (const args of cases) {
+    const result = await tool.execute(args);
+    assert.deepEqual(JSON.parse(JSON.stringify(result)), result, `action ${args.action} must survive JSON`);
+    assert.doesNotThrow(() => JSON.stringify(result, (_key, value) => {
+      if (value === undefined) throw new Error('undefined value');
+      return value;
+    }));
+  }
 });
