@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { readFileSync } from 'node:fs';
+
 import { apply, name, version } from '../index.js';
 import { makeCtx, makeEntry, makeLoader, makeManager } from './fakes.js';
 
@@ -31,8 +33,9 @@ function fullCtx({ entries = [], manager, hmr = {} } = {}) {
 }
 
 test('the plugin exports the identity the bundle patch declares', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(name, 'dsh-plugin-unlock');
-  assert.equal(version, '0.1.0');
+  assert.equal(version, manifest.version, 'the exported version must track package.json');
 });
 
 test('apply registers the tool, the routes and the automatic repair', () => {
