@@ -54,7 +54,7 @@ pnpm add github:YG/dsh-plugin-unlock
 
 then add `dsh-plugin-unlock` to `dsh.profile.bundles` in that `package.json` (or install it through the marketplace, which does both). Restart DSH once so the plugin itself loads.
 
-No dependencies. Node ≥ 22, which DSH already requires.
+No dependencies. Node ≥ 22, which DSH already requires. Built and verified against DeepSeek Harness **0.2.2-rc.5** (see below).
 
 ## Use it
 
@@ -119,6 +119,40 @@ curl -s -b "$COOKIE" -X POST http://127.0.0.1:64511/dsh-plugin-unlock/heal-all
 | `/dsh-plugin-unlock/heal` | POST `{name, version?, update?}` |
 | `/dsh-plugin-unlock/heal-all` | POST `{update?}` |
 
+## DeepSeek Harness 0.2.2-rc.5
+
+The refusal this plugin repairs is unchanged in 0.2.2-rc.5 — the same
+`bundle-in-use` check on a surviving `fiber.uid`, the same `Fiber.dispose()`
+clearing it — but three things around it did change, and 0.2.0 follows them:
+
+- **`incompatible-version` is a new way for an update to fail.** The manager now
+  refuses a target whose `engines.dsh` / `peerDependencies` do not accept the
+  running Harness, and `listVersions()` marks each such version with
+  `incompatible`. `plugin_unlock` therefore never aims at `versions[0]` blindly:
+  it takes the newest version this Harness accepts, reports the ones it skipped
+  (`skippedIncompatible`), and when *every* newer version is incompatible it
+  releases the lock, installs nothing, and answers `step: "compatible-version"`
+  with `needsCompatibleVersion: true` instead of blaming the lock.
+- **Registry lookups take an `AbortSignal`.** The deadline is now a real
+  cancellation, not just an abandoned promise, so a slow registry stops early
+  and `deadlineMs` (default 180 s) still bounds `updateBundle()`, which takes no
+  signal.
+- **Updates report progress by `requestId`.** Every update the plugin runs
+  carries its own id, so it shows up in the Host's `plugin-manager/update-state`
+  stream like a marketplace update instead of an unexplained silence. The id is
+  returned in the result for cross-referencing the manager's log.
+
+`status` also reports the running Harness version (`runtime.dshVersion`, read
+from `<install>/resources/app/dsh/package.json`) next to the pnpm payload state,
+so "this version predates my Harness" is readable from the answer itself.
+
+The manifest deliberately declares no `engines.dsh`. A range such as
+`>=0.2.2-rc.5` would look tidy today and — because semver prereleases only
+satisfy a comparator on their own `major.minor.patch` — would silently get this
+plugin skipped as incompatible on the next `0.2.3-rc.1`, which is precisely the
+failure it exists to prevent.
+
+
 ## Configuration
 
 In the bundle's patch row (`cordis.patch.yml`), or through the plugin's settings if your front-end exposes them:
@@ -157,7 +191,7 @@ Every repair is appended to `~/.dsh/plugins-data/dsh-plugin-unlock/report.jsonl`
 ## Development
 
 ```bash
-node --test          # 77 unit tests, no dependencies
+node --test          # 83 unit tests, no dependencies
 ```
 
 `lib/keys.js` holds the single piece of knowledge the plugin is built on — the manager's own "in use" predicate — as pure functions, so the matching rules are testable without a Host. `lib/runtime.js` does the same for the other half of the problem: which pnpm the Host runs, where it should be, and whether it is there. Everything else is I/O over injected services.

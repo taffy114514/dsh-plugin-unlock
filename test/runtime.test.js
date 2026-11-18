@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 
-import { PNPM_ENTRY, looksLikeRuntimeFailure, probeRuntime, runtimeHint, runtimeRoots } from '../lib/runtime.js';
+import { PNPM_ENTRY, looksLikeRuntimeFailure, probeHost, probeRuntime, runtimeHint, runtimeRoots } from '../lib/runtime.js';
 
 /** Build a fake installation with (or without) the payload inside it. */
 function fakeInstall({ payload = true, manifest = true } = {}) {
@@ -64,4 +64,21 @@ test('a runtime failure is told apart from a manager refusal', () => {
   assert.equal(looksLikeRuntimeFailure(new Error('not-removable')), false);
   assert.equal(looksLikeRuntimeFailure('ENOENT: no such file, open package.json'), false);
   assert.equal(looksLikeRuntimeFailure(undefined), false);
+});
+
+test('probeHost reads the running Harness version from the application manifest', () => {
+  const host = probeHost({
+    execPath: '/apps/DeepSeek Harness/DeepSeek Harness.exe',
+    readFile: (path) => {
+      assert.equal(path, join('/apps/DeepSeek Harness', 'resources', 'app', 'dsh', 'package.json'));
+      return JSON.stringify({ name: '@deepseek-ai/dsh-desktop-runtime', version: '0.2.2-rc.5' });
+    },
+  });
+  assert.equal(host.dshVersion, '0.2.2-rc.5');
+});
+
+test('probeHost answers null instead of throwing when the manifest is gone', () => {
+  const host = probeHost({ execPath: '/apps/x.exe', readFile: () => { throw new Error('ENOENT'); } });
+  assert.equal(host.dshVersion, null);
+  assert.equal(probeHost({ execPath: '' }).dshVersion, null);
 });

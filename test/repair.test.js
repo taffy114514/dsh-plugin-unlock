@@ -114,7 +114,8 @@ test('update releases first, then hands the newest version to the manager', asyn
   assert.equal(result.to, '1.4.2');
   assert.equal(result.versionSource, 'registry');
   assert.deepEqual(manager.calls.updateBundle.map((call) => [call.name, call.version]), [['dsh-caveman', '1.4.2']]);
-  assert.equal(manager.calls.updateBundle[0].options.requestId, undefined);
+  assert.match(manager.calls.updateBundle[0].options.requestId, /^[0-9a-f-]{36}$/, 'the update carries a request id 0.2.2-rc.5 streams progress under');
+  assert.equal(result.requestId, manager.calls.updateBundle[0].options.requestId);
 });
 
 test('an explicit version wins over the registry list', async () => {
@@ -404,4 +405,97 @@ test('a manager call that never answers becomes a timeout, not a hang', async ()
   assert.equal(result.refusal.reason.code, 'unlock-timeout');
   assert.equal(entry.fiber.uid, null, 'the release still happened first');
   assert.equal(log.events.some((event) => event.event === 'update-timeout'), true);
+});
+
+test('a version this Harness refuses is skipped, not aimed at', async () => {
+  const manager = makeManager({
+    bundles: BUNDLES,
+    rows: ROWS,
+    versions: {
+      'dsh-caveman': {
+        status: 'listed',
+        installed: '1.0.0',
+        registry: 'https://registry.npmjs.org/',
+        attempts: [],
+        versions: [
+          { version: '1.9.0', incompatible: { name: 'dsh-caveman', version: '1.9.0', runtimeVersion: '0.2.2-rc.5', requirements: { 'engines.dsh': '>=0.3.0' }, exempted: false } },
+          { version: '1.4.2' },
+        ],
+        omitted: 0,
+      },
+    },
+  });
+  const { repair } = setup({ entries: [makeEntry({ id: 'dsh-caveman', name: 'dsh-caveman' })], manager });
+
+  const result = await repair.update('dsh-caveman');
+  assert.equal(result.ok, true);
+  assert.equal(result.to, '1.4.2', 'the newest version 0.2.2-rc.5 accepts wins');
+  assert.deepEqual(result.skippedIncompatible.map((item) => item.version), ['1.9.0']);
+});
+
+test('an update the Harness refuses as incompatible is named, not blamed on the lock', async () => {
+  const manager = makeManager({
+    bundles: BUNDLES,
+    rows: ROWS,
+    versions: { 'dsh-caveman': { status: 'listed', installed: '1.0.0', registry: null, attempts: [], versions: [{ version: '1.4.2' }], omitted: 0 } },
+    updateResult: () => ({
+      from: '1.0.0',
+      to: '1.4.2',
+      step: 'check',
+      result: { changed: false, application: 'failed', stage: 'install', target: 'dsh-caveman@1.4.2', error: { code: 'incompatible-version', incompatible: [{ name: 'dsh-caveman', version: '1.4.2' }] } },
+    }),
+  });
+  const { repair, log } = setup({ entries: [makeEntry({ id: 'dsh-caveman', name: 'dsh-caveman' })], manager });
+
+  const result = await repair.update('dsh-caveman');
+  assert.equal(result.ok, false);
+  assert.equal(result.step, 'compatible-version');
+  assert.equal(result.needsCompatibleVersion, true);
+  assert.match(result.reason, /incompatible/);
+  assert.equal(log.events.at(-1).event, 'update');
+});
+
+test('when every newer version is incompatible the release still happens and the reason says so', async () => {
+  const manager = makeManager({
+    bundles: BUNDLES,
+    rows: ROWS,
+    versions: {
+      'dsh-caveman': {
+        status: 'listed',
+        installed: '1.0.0',
+        registry: null,
+        attempts: [],
+        versions: [{ version: '1.9.0', incompatible: { name: 'dsh-caveman' } }],
+        omitted: 0,
+      },
+    },
+  });
+  const entry = makeEntry({ id: 'dsh-caveman', name: 'dsh-caveman' });
+  const { repair, log } = setup({ entries: [entry], manager });
+
+  const result = await repair.update('dsh-caveman');
+  assert.equal(result.ok, false);
+  assert.equal(result.step, 'compatible-version');
+  assert.equal(result.needsCompatibleVersion, true);
+  assert.equal(manager.calls.updateBundle.length, 0, 'nothing is installed that the Host would refuse');
+  assert.equal(entry.fiber.uid, null, 'the fiber was freed anyway, so the marketplace can proceed');
+  assert.equal(log.events.some((event) => event.event === 'update-incompatible'), true);
+});
+
+test('status reports the DeepSeek Harness version the compatibility check uses', async () => {
+  const manager = makeManager({ bundles: BUNDLES, rows: ROWS });
+  const log = makeLog();
+  const ctx = makeCtx({ pluginManager: manager, loader: makeLoader([]) });
+  const repair = createRepair({
+    ctx,
+    config: normalizeConfig({}),
+    state: { healing: new Set(), inFlight: new Set(), attempts: new Map() },
+    log,
+    probe: () => RUNTIME_OK,
+    hostProbe: () => ({ dshVersion: '0.2.2-rc.5', manifestPath: '/app/resources/app/dsh/package.json' }),
+  });
+
+  const status = await repair.status();
+  assert.equal(status.runtime.dshVersion, '0.2.2-rc.5');
+  assert.equal(status.runtime.ok, true);
 });
